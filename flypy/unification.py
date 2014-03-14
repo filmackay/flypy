@@ -20,12 +20,16 @@ class TypeConstructor(object):
 
     Attributes
     ==========
-    cls:
+    cls: type
         The class implementing the type. We typically create type
         constructors from implementation classes.
 
-    params:
+    params: tuple([ TypeVar ])
         A type variable with potential constraints.
+
+    supertypes: set([ TypeConstructor ])
+        Super types according to the flypy subtype relations. This includes
+        only flypy type constructors from @jit classes.
 
     Examples
     ========
@@ -39,26 +43,27 @@ class TypeConstructor(object):
         Foo[a <= Bar]
     """
 
-    def __init__(self, cls, params):
+    def __init__(self, cls, params, supertype):
         self.impl = cls
         self.params = tuple(params)
-
-        # Compute all supertypes
-        super = supertype(cls)
-        if super:
-            self.supertypes = set([super]) | super.supertypes
-        else:
-            self.supertypes = set()
+        self.supertype = supertype
+        self.supertypes = set([self])
+        if supertype is not None:
+            self.supertypes |= supertype.supertypes
 
     @property
     def name(self):
-        return self.impl.__name__
+        if self.impl:
+            return self.impl.__name__
+        return "<Unnamed type constructor>"
 
     def __getitem__(self, concrete_params):
         assert len(concrete_params) == len(self.params)
         return Type(self, concrete_params)
 
     def __repr__(self):
+        if not self.params:
+            return self.name
         return "%s[%s]" % (self.name, self.params)
 
 
@@ -72,9 +77,12 @@ class Type(object):
         Foo[int8]
     """
 
-    def __init__(self, tcon, params):
+    def __init__(self, tcon, params, layout={}, fields={}):
         self.tcon = tcon
         self.params = tuple(params)
+
+        self.layout = dict(layout)
+        self.fields = dict(fields)
 
     def __repr__(self):
         return "%s[%s]" % (self.tcon.name, self.params)
@@ -114,23 +122,28 @@ def normalize(typ):
 # Subtyping
 #===------------------------------------------------------------------===
 
-def supertype(cls):
+def superclass(cls):
     """
-    Return the supertype of the given class.
+    Return the super class of the given class.
 
     NOTE: This breaks for multiple inheritance, but we don't support that.
     """
     mro = cls.__mro__
     if len(mro) > 1:
-        return mro[-2]
+        return mro[1]
     return None
 
+def supertype(tcon):
+    """
+    Return the supertype of the given type constructor.
+    """
+    return tcon.supertype
 
 def issubtype(tcon1, tcon2):
     """
     Check whether tcon1 <: tcon2
     """
-    return tcon1 in tcon2.supertypes
+    return tcon2 in tcon1.supertypes
 
 
 def join_constructors(tcon1, tcon2):
@@ -139,7 +152,7 @@ def join_constructors(tcon1, tcon2):
     is class `Super` such that issubclass(A, Super) and issubclass(B, Super).
     """
     result = tcon1
-    while not issubtype(tcon2, result):
+    while result and not issubtype(tcon2, result):
         result = supertype(result)
     return result
 

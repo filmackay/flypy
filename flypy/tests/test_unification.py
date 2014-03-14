@@ -7,13 +7,18 @@ from flypy.unification import (TypeConstructor, Type, tvars, typejoin,
 
 a, b, c = tvars('a', 'b', 'c')
 
-def maketype(name, parent=object, params=()):
-    class Cls(parent):
+def maketype(name, parent, params=()):
+    class Cls(object):
         pass
     Cls.__name__ = name
-    return TypeConstructor(Cls, params)
 
-A = maketype('A')
+    tcon = TypeConstructor(Cls, params, parent)
+    Cls.type = tcon
+    return tcon
+
+
+Object = TypeConstructor(object, [], None)
+A = maketype('A', Object)
 B = maketype('B', A)
 C = maketype('C', B)
 D = maketype('D', B)
