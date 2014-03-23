@@ -38,6 +38,7 @@ import numpy as np
 #===------------------------------------------------------------------===
 
 _cache = {} # (f, subterms) -> Appl
+_keepalive = []
 
 def make_applier(f, *subterms):
     """Create a blaze function application term"""
@@ -58,7 +59,7 @@ def make_applier(f, *subterms):
 
     # NOTE: flypy doesn't reconstruct flypy objects recursively, it only
     #       acts on roots!
-    subterms = fromobject(subterms, typeof(subterms))
+    subterms = fromobject(subterms, typeof(subterms), _keepalive)
     return Apply(subterms)
 
 def constant(n):
